@@ -2,18 +2,17 @@ from kfp.v2.dsl import component, Input, Output, Dataset, Model
 
 
 @component(base_image="us-docker.pkg.dev/deeplearning-platform-release/gcr.io/pytorch-gpu.1-13.py310",
-          packages_to_install=["unsloth", "transformers", "bitsandbytes", "accelerate", 
-                               "xformers", "peft", "trl", "triton", "ut_cross_entropy", "unsloth_zoo", "timm"])
+           packages_to_install=["unsloth", "transformers[vision]", "bitsandbytes", "accelerate","peft","trl",
+                               "xformers", "timm"])
 def train_model(processed_train_data: Input[Dataset],
-                model: Output[Model]):
+                model_path: Output[Model]):
 
     """
     Train the model.
 
     Args:
         processed_train_data (Input[Dataset]): Input processed train data.
-        train_labels_data (Input[Dataset]): Input train labels data.
-        model (Output[Model])): Output trained model.
+        model_path (Output[Model])): Output trained model path.
     """
     from unsloth import FastVisionModel # FastLanguageModel for LLMs
     from unsloth import get_chat_template
@@ -21,7 +20,11 @@ def train_model(processed_train_data: Input[Dataset],
     from trl import SFTTrainer, SFTConfig
     from transformers import AutoModelForCausalLM, AutoTokenizer
     import os
+    import joblib
     import torch
+    
+    # Load the processed data from the path
+    converted_train_dataset = joblib.load(processed_train_data.path)
 
     model, processor = FastVisionModel.from_pretrained(
         model_name = "unsloth/gemma-3n-E4B", # Or "unsloth/gemma-3n-E2B-it"
@@ -56,7 +59,7 @@ def train_model(processed_train_data: Input[Dataset],
    
     trainer = SFTTrainer(
         model=model,
-        train_dataset=converted_dataset,
+        train_dataset=converted_train_dataset,
         processing_class=processor.tokenizer,
         data_collator=UnslothVisionDataCollator(model, processor),
         args = SFTConfig(
@@ -64,7 +67,7 @@ def train_model(processed_train_data: Input[Dataset],
             gradient_accumulation_steps = 4,
             max_grad_norm = 0.3,            # max gradient norm based on QLoRA paper
             warmup_ratio = 0.03,
-            max_steps = 5,
+            max_steps = 60,
             #num_train_epochs = 2,          # Set this instead of max_steps for full training runs
             learning_rate = 2e-4,
             logging_steps = 1,
@@ -91,6 +94,7 @@ def train_model(processed_train_data: Input[Dataset],
     print(f"GPU = {gpu_stats.name}. Max memory = {max_memory} GB.")
     print(f"{start_gpu_memory} GB of memory reserved.")
 
+    # Start training
     trainer_stats = trainer.train()
 
     # Show final memory and time stats
@@ -108,7 +112,7 @@ def train_model(processed_train_data: Input[Dataset],
     print(f"Peak reserved memory for training % of max memory = {lora_percentage} %.")
 
     # Save the trained model
-    save_model_path = os.path.join(model.path, "model")  # Save to a directory
+    save_model_path = os.path.join(model_path.path, "model")  # Save to a directory
     model.save_pretrained(save_model_path)
     processor.save_pretrained(save_model_path)
 
