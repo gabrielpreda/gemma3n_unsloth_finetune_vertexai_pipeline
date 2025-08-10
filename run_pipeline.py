@@ -13,6 +13,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run Vertex AI Pipeline Job")
     parser.add_argument("--project", required=True, help="GCP Project ID")
     parser.add_argument("--location", required=True, help="GCP Location (region)")
+    parser.add_argument("--kaggle_username", required=True, help="Kaggle Username")
+    parser.add_argument("--kaggle_key", required=True, help="Kaggle API Key")
     parser.add_argument("--dataset_path", default="unsloth/LaTeX_OCR", help="GCS Bucket for data")
     parser.add_argument("--pipeline_template", default="gemma3n_unsloth_finetune.json", help="Path to the pipeline template JSON")
     parser.add_argument("--pipeline_root", default="gs://gemma3n-unsloth-finetune/gemma3n_unsloth_finetune_pipeline", help="GCS path for pipeline root")
@@ -35,6 +37,8 @@ def main():
             "project": args.project,
             "location": args.location,
             "dataset_path": args.dataset_path,
+            "kaggle_username": args.kaggle_username,
+            "kaggle_key": args.kaggle_key
         },
         enable_caching=True  # Enable caching
     )
